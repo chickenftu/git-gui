@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 
 from .git_backend import Repository, FileStatus
 from .diff_highlighter import DiffHighlighter
+from .diff_viewer import DiffViewer
 
 class GitGuiApp(QMainWindow):
     def __init__(self, repo_path: str) -> None:
@@ -39,6 +40,7 @@ class GitGuiApp(QMainWindow):
         self.log_view.setReadOnly(True)
         self._diff_highlighter = DiffHighlighter(self.log_view.document())
         self.branch_label = QLabel()
+        self._diff_viewer = DiffViewer(self)
 
         central = QWidget()
         layout = QVBoxLayout()
@@ -100,7 +102,8 @@ class GitGuiApp(QMainWindow):
         self.status_list.clear()
         for status in self.repo.status():
             item = QListWidgetItem(f"{status.status}\t{status.path}")
-            item.setData(Qt.ItemDataRole.UserRole, status.path)
+            # store the FileStatus object so we can inspect its state later
+            item.setData(Qt.ItemDataRole.UserRole, status)
             self.status_list.addItem(item)
         self.log_view.setPlainText(self.repo.log())
         branch = self._current_branch()
@@ -110,44 +113,64 @@ class GitGuiApp(QMainWindow):
         return self.repo.current_branch()
 
     def _show_diff(self, item: QListWidgetItem) -> None:
-        path = item.data(Qt.ItemDataRole.UserRole)
-        self._display_diff(path)
+        status: FileStatus = item.data(Qt.ItemDataRole.UserRole)
+        self._display_diff(status.path)
 
     def _display_diff(self, path: str) -> None:
         diff = self.repo.diff(path)
         if not diff.strip():
             diff = 'No changes'
-        self.log_view.setPlainText(diff)
+        self._diff_viewer.set_diff(diff)
+        self._diff_viewer.show()
 
     def _show_status_menu(self, pos) -> None:
         item = self.status_list.itemAt(pos)
         if item is None:
             return
+        status: FileStatus = item.data(Qt.ItemDataRole.UserRole)
         menu = QMenu(self)
-        stage_action = menu.addAction("Stage File")
-        unstage_action = menu.addAction("Unstage File")
-        add_action = menu.addAction("Add File to Repo")
+
+        index_state = status.status[0] if len(status.status) > 0 else ' '
+        work_state = status.status[1] if len(status.status) > 1 else ' '
+
+        stage_action = None
+        unstage_action = None
+        add_action = None
+        ignore_action = None
+
+        if status.status == '??':
+            add_action = menu.addAction("Add File to Repo")
+            ignore_action = menu.addAction("Ignore File")
+        else:
+            if work_state != ' ':
+                stage_action = menu.addAction("Stage File")
+            if index_state != ' ':
+                unstage_action = menu.addAction("Unstage File")
+
         diff_action = menu.addAction("Show Diff")
         action = menu.exec(self.status_list.mapToGlobal(pos))
-        path = item.data(Qt.ItemDataRole.UserRole)
+
         if action == stage_action:
-            self.repo.stage([path])
+            self.repo.stage([status.path])
             self.refresh()
         elif action == unstage_action:
-            self.repo.unstage([path])
+            self.repo.unstage([status.path])
             self.refresh()
         elif action == add_action:
-            self.repo.stage([path])
+            self.repo.stage([status.path])
+            self.refresh()
+        elif action == ignore_action:
+            self.repo.ignore([status.path])
             self.refresh()
         elif action == diff_action:
-            self._display_diff(path)
+            self._display_diff(status.path)
 
     def commit(self) -> None:
         message = self.commit_msg.toPlainText().strip()
         if not message:
             QMessageBox.warning(self, "Warning", "Commit message is empty")
             return
-        paths = [self.status_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.status_list.count())]
+        paths = [self.status_list.item(i).data(Qt.ItemDataRole.UserRole).path for i in range(self.status_list.count())]
         self.repo.stage(paths)
         self.repo.commit(message)
         self.commit_msg.clear()

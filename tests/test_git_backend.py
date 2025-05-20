@@ -50,5 +50,17 @@ class TestRepository(unittest.TestCase):
             self.assertIn('-hello', diff)
             self.assertIn('+hello world', diff)
 
+    def test_ignore(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_path = Path(tmpdir)
+            self.create_repo(repo_path)
+            (repo_path / 'temp.log').write_text('temp')
+            repo = Repository(str(repo_path))
+            repo.ignore(['temp.log'])
+            gitignore = (repo_path / '.gitignore').read_text()
+            self.assertIn('temp.log', gitignore)
+            statuses = repo.status()
+            self.assertFalse(any(s.path == 'temp.log' for s in statuses))
+
 if __name__ == '__main__':
     unittest.main()
