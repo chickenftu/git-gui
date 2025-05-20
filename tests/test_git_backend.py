@@ -39,5 +39,16 @@ class TestRepository(unittest.TestCase):
             review = repo.push_review(remote='origin', branch='master')
             self.assertIn('new commit', review)
 
+    def test_diff(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_path = Path(tmpdir)
+            self.create_repo(repo_path)
+            file_path = repo_path / 'file.txt'
+            file_path.write_text('hello world')
+            repo = Repository(str(repo_path))
+            diff = repo.diff('file.txt')
+            self.assertIn('-hello', diff)
+            self.assertIn('+hello world', diff)
+
 if __name__ == '__main__':
     unittest.main()

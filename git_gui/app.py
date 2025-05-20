@@ -30,6 +30,7 @@ class GitGuiApp(QMainWindow):
         self.repo = Repository(repo_path)
 
         self.status_list = QListWidget()
+        self.status_list.itemDoubleClicked.connect(self._show_diff)
         self.commit_msg = QTextEdit()
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
@@ -102,8 +103,14 @@ class GitGuiApp(QMainWindow):
         self.branch_label.setText(f"Branch: {branch}")
 
     def _current_branch(self) -> str:
-        result = os.popen(f"cd '{self.repo.path}' && git rev-parse --abbrev-ref HEAD").read().strip()
-        return result
+        return self.repo.current_branch()
+
+    def _show_diff(self, item: QListWidgetItem) -> None:
+        path = item.data(Qt.ItemDataRole.UserRole)
+        diff = self.repo.diff(path)
+        if not diff.strip():
+            diff = 'No changes'
+        QMessageBox.information(self, 'Diff', diff)
 
     def commit(self) -> None:
         message = self.commit_msg.toPlainText().strip()

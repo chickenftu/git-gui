@@ -1,12 +1,13 @@
 # git-gui
 
 This repository provides a minimal Git GUI application written in Python.
-The GUI uses **PyQt6** and the backend logic relies on standard git commands.
+The GUI uses **PyQt6** and the backend logic relies on **GitPython**.
 
 ## Requirements
 
 - Python 3.10+
 - PyQt6
+- GitPython
 - Git installed and available on the command line
 
 ## Running
@@ -14,7 +15,7 @@ The GUI uses **PyQt6** and the backend logic relies on standard git commands.
 Install the required Python dependencies and run the application with
 
 ```bash
-python -m pip install PyQt6
+python -m pip install PyQt6 GitPython
 python -m git_gui.main /path/to/repository
 ```
 
