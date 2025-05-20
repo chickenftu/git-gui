@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .git_backend import Repository, FileStatus
+from .diff_highlighter import DiffHighlighter
 
 class GitGuiApp(QMainWindow):
     def __init__(self, repo_path: str) -> None:
@@ -31,9 +32,12 @@ class GitGuiApp(QMainWindow):
 
         self.status_list = QListWidget()
         self.status_list.itemDoubleClicked.connect(self._show_diff)
+        self.status_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.status_list.customContextMenuRequested.connect(self._show_status_menu)
         self.commit_msg = QTextEdit()
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
+        self._diff_highlighter = DiffHighlighter(self.log_view.document())
         self.branch_label = QLabel()
 
         central = QWidget()
@@ -107,10 +111,36 @@ class GitGuiApp(QMainWindow):
 
     def _show_diff(self, item: QListWidgetItem) -> None:
         path = item.data(Qt.ItemDataRole.UserRole)
+        self._display_diff(path)
+
+    def _display_diff(self, path: str) -> None:
         diff = self.repo.diff(path)
         if not diff.strip():
             diff = 'No changes'
-        QMessageBox.information(self, 'Diff', diff)
+        self.log_view.setPlainText(diff)
+
+    def _show_status_menu(self, pos) -> None:
+        item = self.status_list.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self)
+        stage_action = menu.addAction("Stage File")
+        unstage_action = menu.addAction("Unstage File")
+        add_action = menu.addAction("Add File to Repo")
+        diff_action = menu.addAction("Show Diff")
+        action = menu.exec(self.status_list.mapToGlobal(pos))
+        path = item.data(Qt.ItemDataRole.UserRole)
+        if action == stage_action:
+            self.repo.stage([path])
+            self.refresh()
+        elif action == unstage_action:
+            self.repo.unstage([path])
+            self.refresh()
+        elif action == add_action:
+            self.repo.stage([path])
+            self.refresh()
+        elif action == diff_action:
+            self._display_diff(path)
 
     def commit(self) -> None:
         message = self.commit_msg.toPlainText().strip()
