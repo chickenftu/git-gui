@@ -66,6 +66,8 @@ class GitGuiApp(QMainWindow):
         pull_action.triggered.connect(self.pull)
         push_action = git_menu.addAction("Push")
         push_action.triggered.connect(self.push)
+        review_action = git_menu.addAction("Push Review")
+        review_action.triggered.connect(self.push_review)
         menu_bar.addMenu(git_menu)
 
         self.setMenuBar(menu_bar)
@@ -75,6 +77,10 @@ class GitGuiApp(QMainWindow):
         self.addToolBar(toolbar)
         refresh_action = toolbar.addAction("Refresh")
         refresh_action.triggered.connect(self.refresh)
+        pull_action = toolbar.addAction("Pull")
+        pull_action.triggered.connect(self.pull)
+        push_action = toolbar.addAction("Push")
+        push_action.triggered.connect(self.push)
 
     def open_repo(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "Open Repository", os.getcwd())
@@ -117,6 +123,12 @@ class GitGuiApp(QMainWindow):
     def push(self) -> None:
         self.repo.push()
         self.refresh()
+
+    def push_review(self) -> None:
+        review = self.repo.push_review()
+        if not review.strip():
+            review = 'No commits to push'
+        QMessageBox.information(self, 'Push Review', review)
 
 
 def run(repo_path: str) -> None:

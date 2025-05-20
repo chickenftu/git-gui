@@ -32,4 +32,5 @@ If no path is provided, the current directory is used.
 The project aims to demonstrate basic best practices for separating the
 business logic (git operations) from the user interface. The GUI lists the
 current status of repository files, allows staging and committing changes,
-and exposes simple pull and push actions.
+and exposes simple pull and push actions. Pull and push are available as
+toolbar buttons, and a *Push Review* action shows commits that will be pushed.
