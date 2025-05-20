@@ -35,3 +35,9 @@ business logic (git operations) from the user interface. The GUI lists the
 current status of repository files, allows staging and committing changes,
 and exposes simple pull and push actions. Pull and push are available as
 toolbar buttons, and a *Push Review* action shows commits that will be pushed.
+The context menu for each file adapts based on its git status. Untracked files
+offer an option to add the file to the repository or ignore it (which writes
+the path to `.gitignore`). Tracked files show stage or unstage actions
+depending on whether changes are staged.
+Double-clicking a file or choosing **Show Diff** opens an HTML diff viewer
+styled similarly to the web diff view.

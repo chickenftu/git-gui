@@ -28,10 +28,27 @@ class Repository:
         lines = output.splitlines()
         statuses: List[FileStatus] = []
         for line in lines:
-            status_code = line[:2].strip()
+            # keep the two character XY status to allow more detailed checks
+            status_code = line[:2]
             file_path = line[3:]
             statuses.append(FileStatus(path=file_path, status=status_code))
         return statuses
+
+    def ignore(self, files: List[str]) -> None:
+        """Add files to .gitignore and stage the file."""
+        if not files:
+            return
+        gitignore_path = os.path.join(self.path, '.gitignore')
+        existing: List[str] = []
+        if os.path.exists(gitignore_path):
+            with open(gitignore_path, 'r', encoding='utf-8') as fh:
+                existing = [line.strip() for line in fh if line.strip()]
+        with open(gitignore_path, 'a', encoding='utf-8') as fh:
+            for f in files:
+                if f not in existing:
+                    fh.write(f + '\n')
+        # stage the .gitignore so it does not appear as untracked
+        self.repo.git.add(gitignore_path)
 
     def stage(self, files: List[str]) -> None:
         if files:
