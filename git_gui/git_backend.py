@@ -59,3 +59,16 @@ class Repository:
     def log(self, max_count: int = 20) -> str:
         result = _run_git(['log', f'--max-count={max_count}', '--oneline'], self.path)
         return result.stdout
+
+    def current_branch(self) -> str:
+        """Return the name of the current branch."""
+        result = _run_git(['rev-parse', '--abbrev-ref', 'HEAD'], self.path)
+        return result.stdout.strip()
+
+    def push_review(self, remote: str = 'origin', branch: Optional[str] = None) -> str:
+        """Return commits that would be pushed to the remote."""
+        if branch is None:
+            branch = self.current_branch()
+        range_spec = f'{remote}/{branch}..HEAD'
+        result = _run_git(['log', '--oneline', range_spec], self.path)
+        return result.stdout
