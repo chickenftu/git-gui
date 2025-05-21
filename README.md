@@ -58,3 +58,22 @@ the path to `.gitignore`). Tracked files show stage or unstage actions
 depending on whether changes are staged.
 Double-clicking a file or choosing **Show Diff** opens an HTML diff viewer
 styled similarly to the web diff view.
+
+## Features
+
+The application implements a range of Git functionality:
+
+- **Repository management** – open existing repositories, initialize new ones
+  and add remotes. User name and email can be configured per repository.
+- **Branching & history** – create, rename, delete and switch branches as well
+  as view the reflog.
+- **Staging area** – interactive file list with context menu to stage/unstage
+  and a diff viewer for each file.
+- **Remotes** – pull, push and fetch operations plus a push review dialog.
+- **Tags & releases** – create and delete lightweight or annotated tags.
+- **Submodules** – add, update, sync and remove submodules via helper
+  functions.
+- **Search & filters** – search commits by message or author and filter the
+  status list by file path prefix.
+- **Packaging** – `pyproject.toml` with project metadata for building wheels or
+  creating frozen binaries with PyInstaller.
