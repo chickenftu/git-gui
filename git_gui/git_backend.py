@@ -94,3 +94,11 @@ class Repository:
         if cached:
             return self.repo.git.diff('--cached', '--', path)
         return self.repo.git.diff('--', path)
+
+    def branches(self) -> List[str]:
+        """Return a list of branch names."""
+        return [head.name for head in self.repo.heads]
+
+    def checkout(self, branch: str) -> None:
+        """Switch to the given branch."""
+        self.repo.git.checkout(branch)

@@ -6,20 +6,20 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
-    QListWidget,
-    QListWidgetItem,
+    QListView,
     QMainWindow,
     QMenu,
     QMenuBar,
     QMessageBox,
+    QComboBox,
     QTextEdit,
     QToolBar,
     QWidget,
     QVBoxLayout,
-    QLabel,
 )
 
 from .git_backend import Repository, FileStatus
+from .models import FileStatusModel
 from .diff_highlighter import DiffHighlighter
 from .diff_viewer import DiffViewer
 
@@ -31,21 +31,24 @@ class GitGuiApp(QMainWindow):
 
         self.repo = Repository(repo_path)
 
-        self.status_list = QListWidget()
-        self.status_list.itemDoubleClicked.connect(self._show_diff)
-        self.status_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.status_list.customContextMenuRequested.connect(self._show_status_menu)
+        self.status_model = FileStatusModel()
+        self.status_view = QListView()
+        self.status_view.setModel(self.status_model)
+        self.status_view.doubleClicked.connect(self._show_diff_index)
+        self.status_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.status_view.customContextMenuRequested.connect(self._show_status_menu)
         self.commit_msg = QTextEdit()
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
         self._diff_highlighter = DiffHighlighter(self.log_view.document())
-        self.branch_label = QLabel()
+        self.branch_box = QComboBox()
+        self.branch_box.activated[str].connect(self._checkout_branch)
         self._diff_viewer = DiffViewer(self)
 
         central = QWidget()
         layout = QVBoxLayout()
-        layout.addWidget(self.branch_label)
-        layout.addWidget(self.status_list)
+        layout.addWidget(self.branch_box)
+        layout.addWidget(self.status_view)
         layout.addWidget(QLabel("Commit message:"))
         layout.addWidget(self.commit_msg)
         layout.addWidget(QLabel("Log:"))
@@ -99,22 +102,33 @@ class GitGuiApp(QMainWindow):
                 QMessageBox.critical(self, "Error", str(exc))
 
     def refresh(self) -> None:
-        self.status_list.clear()
-        for status in self.repo.status():
-            item = QListWidgetItem(f"{status.status}\t{status.path}")
-            # store the FileStatus object so we can inspect its state later
-            item.setData(Qt.ItemDataRole.UserRole, status)
-            self.status_list.addItem(item)
+        statuses = self.repo.status()
+        self.status_model.update_statuses(statuses)
         self.log_view.setPlainText(self.repo.log())
-        branch = self._current_branch()
-        self.branch_label.setText(f"Branch: {branch}")
+        self._populate_branches()
 
     def _current_branch(self) -> str:
         return self.repo.current_branch()
 
-    def _show_diff(self, item: QListWidgetItem) -> None:
-        status: FileStatus = item.data(Qt.ItemDataRole.UserRole)
-        self._display_diff(status.path)
+    def _populate_branches(self) -> None:
+        branches = self.repo.branches()
+        current = self._current_branch()
+        self.branch_box.blockSignals(True)
+        self.branch_box.clear()
+        self.branch_box.addItems(branches)
+        if current in branches:
+            self.branch_box.setCurrentText(current)
+        self.branch_box.blockSignals(False)
+
+    def _checkout_branch(self, branch: str) -> None:
+        if branch:
+            self.repo.checkout(branch)
+            self.refresh()
+
+    def _show_diff_index(self, index) -> None:
+        status = self.status_model.status_at(index)
+        if status:
+            self._display_diff(status.path)
 
     def _display_diff(self, path: str) -> None:
         diff = self.repo.diff(path)
@@ -124,10 +138,13 @@ class GitGuiApp(QMainWindow):
         self._diff_viewer.show()
 
     def _show_status_menu(self, pos) -> None:
-        item = self.status_list.itemAt(pos)
+        index = self.status_view.indexAt(pos)
+        item = None
+        if index.isValid():
+            item = self.status_model.status_at(index)
         if item is None:
             return
-        status: FileStatus = item.data(Qt.ItemDataRole.UserRole)
+        status = item
         menu = QMenu(self)
 
         index_state = status.status[0] if len(status.status) > 0 else ' '
@@ -148,7 +165,7 @@ class GitGuiApp(QMainWindow):
                 unstage_action = menu.addAction("Unstage File")
 
         diff_action = menu.addAction("Show Diff")
-        action = menu.exec(self.status_list.mapToGlobal(pos))
+        action = menu.exec(self.status_view.mapToGlobal(pos))
 
         if action == stage_action:
             self.repo.stage([status.path])
@@ -170,7 +187,7 @@ class GitGuiApp(QMainWindow):
         if not message:
             QMessageBox.warning(self, "Warning", "Commit message is empty")
             return
-        paths = [self.status_list.item(i).data(Qt.ItemDataRole.UserRole).path for i in range(self.status_list.count())]
+        paths = [s.path for s in self.status_model.statuses]
         self.repo.stage(paths)
         self.repo.commit(message)
         self.commit_msg.clear()
