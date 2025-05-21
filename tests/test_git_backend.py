@@ -62,5 +62,34 @@ class TestRepository(unittest.TestCase):
             statuses = repo.status()
             self.assertFalse(any(s.path == 'temp.log' for s in statuses))
 
+    def test_branch_and_tag(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_path = Path(tmpdir)
+            self.create_repo(repo_path)
+            repo = Repository(str(repo_path))
+            repo.create_branch('feature')
+            repo.checkout('feature')
+            (repo_path / 'feature.txt').write_text('data')
+            repo.stage(['feature.txt'])
+            repo.commit('add feature')
+            repo.create_tag('v1.0')
+            repo.checkout('master')
+            branches = repo.branches()
+            self.assertIn('feature', branches)
+            repo.delete_branch('feature', force=True)
+            self.assertNotIn('feature', repo.branches())
+            repo.delete_tag('v1.0')
+
+    def test_search_commits(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_path = Path(tmpdir)
+            self.create_repo(repo_path)
+            repo = Repository(str(repo_path))
+            (repo_path / 'new.txt').write_text('change')
+            repo.stage(['new.txt'])
+            repo.commit('search target')
+            result = repo.search_commits('search target')
+            self.assertIn('search target', result)
+
 if __name__ == '__main__':
     unittest.main()

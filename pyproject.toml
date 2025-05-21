@@ -1,0 +1,14 @@
+[project]
+name = "git-gui"
+version = "0.1.0"
+description = "Simple Git GUI application"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PyQt6",
+    "GitPython",
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
