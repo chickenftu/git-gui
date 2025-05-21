@@ -28,6 +28,23 @@ If no path is provided, the current directory is used.
 - `git_gui/main.py` – command line entry point
 - `tests/` – unit tests for git backend logic
 
+## Architectural Plan
+
+The application is organized into several modules using the Qt Model/View
+pattern:
+
+- **`git_gui.git_backend`** – `Repository` wraps GitPython to expose actions
+  like status, staging, committing, pulling, pushing and branch operations.
+- **`git_gui.models`** – `FileStatusModel` implements a `QAbstractListModel`
+  to present `FileStatus` entries from the repository.
+- **`git_gui.diff_viewer`** – `DiffViewer` dialog displays diffs using simple
+  HTML styling.
+- **`git_gui.diff_highlighter`** – `DiffHighlighter` highlights diff output in
+  text widgets.
+- **`git_gui.app`** – `GitGuiApp` main window wiring together the model and
+  backend, providing actions for staging, committing, pulling and pushing.
+- **`git_gui.main`** – entry point launching the application.
+
 ## Development Notes
 
 The project aims to demonstrate basic best practices for separating the
