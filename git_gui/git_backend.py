@@ -123,10 +123,16 @@ class Repository:
     def diff(self, path: str, cached: bool = False) -> str:
         """Return diff for a given file."""
         if cached:
-            diffs = self.repo.index.diff('HEAD', paths=[path])
+            diffs = self.repo.index.diff('HEAD', paths=[path], create_patch=True)
         else:
-            diffs = self.repo.index.diff(None, paths=[path])
-        return "".join(d.diff.decode('utf-8', errors='replace') for d in diffs)
+            diffs = self.repo.index.diff(None, paths=[path], create_patch=True)
+        parts = []
+        for d in diffs:
+            content = d.diff
+            if isinstance(content, bytes):
+                content = content.decode('utf-8', errors='replace')
+            parts.append(content)
+        return "".join(parts)
 
     def branches(self) -> List[str]:
         """Return a list of branch names."""
@@ -220,22 +226,24 @@ class Repository:
             sm.update(recursive=True)
 
     def remove_submodule(self, path: str) -> None:
-        """Remove a submodule from the repository."""
-        self.repo.git.submodule("deinit", "-f", "--", path)
-        module_path = os.path.join(self.path, path)
-        if os.path.exists(module_path):
-            self.repo.git.rm("-f", path)
-            self.repo.git.clean("-fd", module_path)
+        """Remove a submodule from the repository using GitPython APIs."""
+        sm = next(
+            (s for s in self.repo.submodules if s.path == path or s.name == path),
+            None,
+        )
+        if sm is None:
+            return
+        sm.remove(module=True, force=True, configuration=True)
 
     # ------------------------------------------------------------------
     # Search helpers
 
     def search_commits(self, pattern: str, author: Optional[str] = None) -> str:
         """Search commits by message pattern and optionally by author."""
-        rev = f"--grep={pattern}"
+        kwargs = {'grep': pattern}
         if author:
-            rev += f" --author={author}"
-        commits = list(self.repo.iter_commits(rev))
+            kwargs['author'] = author
+        commits = list(self.repo.iter_commits(**kwargs))
         return "\n".join(f"{c.hexsha[:7]} {c.summary}" for c in commits)
 
     def filter_statuses(self, path_filter: str) -> List[FileStatus]:
