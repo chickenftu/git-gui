@@ -1,16 +1,16 @@
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
+from git import Repo
 from git_gui.git_backend import Repository
 
 class TestRepository(unittest.TestCase):
     def create_repo(self, directory: Path) -> Path:
-        subprocess.run(['git', 'init'], cwd=directory, check=True)
+        repo = Repo.init(directory)
         (directory / 'file.txt').write_text('hello')
-        subprocess.run(['git', 'add', 'file.txt'], cwd=directory, check=True)
-        subprocess.run(['git', 'commit', '-m', 'init'], cwd=directory, check=True)
+        repo.index.add(['file.txt'])
+        repo.index.commit('init')
         return directory
 
     def test_status(self):
@@ -28,13 +28,14 @@ class TestRepository(unittest.TestCase):
             remote_path = Path(tmpdir) / 'remote'
             repo_path.mkdir()
             remote_path.mkdir()
-            subprocess.run(['git', 'init', '--bare'], cwd=remote_path, check=True)
+            Repo.init(remote_path, bare=True)
             self.create_repo(repo_path)
-            subprocess.run(['git', 'remote', 'add', 'origin', str(remote_path)], cwd=repo_path, check=True)
-            subprocess.run(['git', 'push', '-u', 'origin', 'master'], cwd=repo_path, check=True)
+            local_repo = Repo(repo_path)
+            local_repo.create_remote('origin', str(remote_path))
+            local_repo.remotes.origin.push('master:master')
             (repo_path / 'new.txt').write_text('change')
-            subprocess.run(['git', 'add', 'new.txt'], cwd=repo_path, check=True)
-            subprocess.run(['git', 'commit', '-m', 'new commit'], cwd=repo_path, check=True)
+            local_repo.index.add(['new.txt'])
+            local_repo.index.commit('new commit')
             repo = Repository(str(repo_path))
             review = repo.push_review(remote='origin', branch='master')
             self.assertIn('new commit', review)

@@ -23,15 +23,44 @@ class Repository:
             raise ValueError(f"{path} is not a git repository")
 
     def status(self) -> List[FileStatus]:
-        """Return status of repository files."""
-        output = self.repo.git.status('--porcelain')
-        lines = output.splitlines()
+        """Return status of repository files using GitPython objects."""
         statuses: List[FileStatus] = []
-        for line in lines:
-            # keep the two character XY status to allow more detailed checks
-            status_code = line[:2]
-            file_path = line[3:]
-            statuses.append(FileStatus(path=file_path, status=status_code))
+
+        # staged changes compared to HEAD
+        for diff in self.repo.index.diff('HEAD'):
+            path = diff.b_path or diff.a_path
+            code = diff.change_type
+            status = {
+                'A': 'A ',
+                'D': 'D ',
+                'R': 'R ',
+                'M': 'M ',
+            }.get(code, 'M ')
+            statuses.append(FileStatus(path=path, status=status))
+
+        # unstaged changes in working tree
+        staged_paths = {s.path for s in statuses}
+        for diff in self.repo.index.diff(None):
+            path = diff.b_path or diff.a_path
+            code = diff.change_type
+            status = {
+                'A': ' A',
+                'D': ' D',
+                'R': ' R',
+                'M': ' M',
+            }.get(code, ' M')
+            if path in staged_paths:
+                for s in statuses:
+                    if s.path == path:
+                        s.status = s.status[0] + status[1]
+                        break
+            else:
+                statuses.append(FileStatus(path=path, status=status))
+
+        # untracked files
+        for path in self.repo.untracked_files:
+            statuses.append(FileStatus(path=path, status='??'))
+
         return statuses
 
     def ignore(self, files: List[str]) -> None:
@@ -48,34 +77,36 @@ class Repository:
                 if f not in existing:
                     fh.write(f + '\n')
         # stage the .gitignore so it does not appear as untracked
-        self.repo.git.add(gitignore_path)
+        self.repo.index.add([gitignore_path])
 
     def stage(self, files: List[str]) -> None:
         if files:
-            self.repo.git.add('--', *files)
+            self.repo.index.add(files)
 
     def unstage(self, files: List[str]) -> None:
         if files:
-            self.repo.git.reset('HEAD', '--', *files)
+            self.repo.index.reset(files)
 
     def commit(self, message: str) -> None:
-        self.repo.git.commit('-m', message)
+        self.repo.index.commit(message)
 
     def pull(self, remote: str = 'origin', branch: Optional[str] = None) -> None:
+        remote_obj = self.repo.remotes[remote]
         if branch:
-            self.repo.git.pull(remote, branch)
+            remote_obj.pull(branch)
         else:
-            self.repo.git.pull(remote)
+            remote_obj.pull()
 
     def push(self, remote: str = 'origin', branch: Optional[str] = None) -> None:
+        remote_obj = self.repo.remotes[remote]
         if branch:
-            self.repo.git.push(remote, branch)
+            remote_obj.push(branch)
         else:
-            self.repo.git.push(remote)
+            remote_obj.push()
 
     def log(self, max_count: int = 20) -> str:
-        output = self.repo.git.log(f'--max-count={max_count}', '--oneline')
-        return output
+        commits = list(self.repo.iter_commits(max_count=max_count))
+        return "\n".join(f"{c.hexsha[:7]} {c.summary}" for c in commits)
 
     def current_branch(self) -> str:
         """Return the name of the current branch."""
@@ -85,15 +116,17 @@ class Repository:
         """Return commits that would be pushed to the remote."""
         if branch is None:
             branch = self.current_branch()
-        range_spec = f'{remote}/{branch}..HEAD'
-        output = self.repo.git.log('--oneline', range_spec)
-        return output
+        range_spec = f"{remote}/{branch}..HEAD"
+        commits = list(self.repo.iter_commits(range_spec))
+        return "\n".join(f"{c.hexsha[:7]} {c.summary}" for c in commits)
 
     def diff(self, path: str, cached: bool = False) -> str:
         """Return diff for a given file."""
         if cached:
-            return self.repo.git.diff('--cached', '--', path)
-        return self.repo.git.diff('--', path)
+            diffs = self.repo.index.diff('HEAD', paths=[path])
+        else:
+            diffs = self.repo.index.diff(None, paths=[path])
+        return "".join(d.diff.decode('utf-8', errors='replace') for d in diffs)
 
     def branches(self) -> List[str]:
         """Return a list of branch names."""
@@ -101,7 +134,7 @@ class Repository:
 
     def checkout(self, branch: str) -> None:
         """Switch to the given branch."""
-        self.repo.git.checkout(branch)
+        self.repo.heads[branch].checkout()
 
     # ------------------------------------------------------------------
     # Repository management helpers
@@ -134,20 +167,23 @@ class Repository:
 
     def create_branch(self, name: str, start_point: Optional[str] = None) -> None:
         """Create a branch from *start_point* (default HEAD)."""
-        self.repo.git.branch(name, start_point or "HEAD")
+        self.repo.create_head(name, start_point or "HEAD")
 
     def rename_branch(self, old: str, new: str) -> None:
         """Rename a branch."""
-        self.repo.git.branch("-m", old, new)
+        self.repo.heads[old].rename(new)
 
     def delete_branch(self, name: str, force: bool = False) -> None:
         """Delete a branch by name."""
-        args = ["-D" if force else "-d", name]
-        self.repo.git.branch(*args)
+        self.repo.delete_head(name, force=force)
 
     def reflog(self) -> str:
         """Return the repository reflog."""
-        return self.repo.git.reflog()
+        log_path = os.path.join(self.repo.git_dir, 'logs', 'HEAD')
+        if os.path.exists(log_path):
+            with open(log_path, 'r', encoding='utf-8') as fh:
+                return fh.read()
+        return ''
 
     # ------------------------------------------------------------------
     # Tag helpers
@@ -165,7 +201,7 @@ class Repository:
 
     def checkout_tag(self, name: str) -> None:
         """Checkout a tag."""
-        self.repo.git.checkout(name)
+        self.repo.tags[name].checkout()
 
     # ------------------------------------------------------------------
     # Submodule helpers
@@ -176,11 +212,12 @@ class Repository:
 
     def update_submodules(self) -> None:
         """Update all submodules."""
-        self.repo.git.submodule("update", "--init", "--recursive")
+        self.repo.submodule_update(init=True, recursive=True)
 
     def sync_submodules(self) -> None:
         """Sync submodule URLs."""
-        self.repo.git.submodule("sync", "--recursive")
+        for sm in self.repo.submodules:
+            sm.update(recursive=True)
 
     def remove_submodule(self, path: str) -> None:
         """Remove a submodule from the repository."""
@@ -195,10 +232,11 @@ class Repository:
 
     def search_commits(self, pattern: str, author: Optional[str] = None) -> str:
         """Search commits by message pattern and optionally by author."""
-        args = ["--grep", pattern]
+        rev = f"--grep={pattern}"
         if author:
-            args += ["--author", author]
-        return self.repo.git.log("--oneline", *args)
+            rev += f" --author={author}"
+        commits = list(self.repo.iter_commits(rev))
+        return "\n".join(f"{c.hexsha[:7]} {c.summary}" for c in commits)
 
     def filter_statuses(self, path_filter: str) -> List[FileStatus]:
         """Filter status entries by path prefix."""
