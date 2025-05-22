@@ -7,10 +7,10 @@ from git_gui.git_backend import Repository
 
 class TestRepository(unittest.TestCase):
     def create_repo(self, directory: Path) -> Path:
-        repo = Repo.init(directory)
+        repo = Repository.init(str(directory))
         (directory / 'file.txt').write_text('hello')
-        repo.index.add(['file.txt'])
-        repo.index.commit('init')
+        repo.stage(['file.txt'])
+        repo.commit('init')
         return directory
 
     def test_status(self):
