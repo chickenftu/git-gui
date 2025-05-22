@@ -42,7 +42,10 @@ class GitGuiApp(QMainWindow):
         self.log_view.setReadOnly(True)
         self._diff_highlighter = DiffHighlighter(self.log_view.document())
         self.branch_box = QComboBox()
-        self.branch_box.activated[str].connect(self._checkout_branch)
+        # PyQt6 removed the overloaded signal selector syntax
+        # (e.g. `activated[str]`). Use the explicit textActivated signal to
+        # receive the selected branch name instead.
+        self.branch_box.textActivated.connect(self._checkout_branch)
         self._diff_viewer = DiffViewer(self)
 
         central = QWidget()
